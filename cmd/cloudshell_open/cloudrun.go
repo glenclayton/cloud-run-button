@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -32,7 +33,7 @@ const (
 )
 
 func deploy(project, name, image, region string, envs []string) (string, error) {
-	cmd := exec.Command("gcloud", "beta", "run", "deploy", "-q",
+	cmd := exec.Command("gcloud", "run", "deploy", "-q",
 		name,
 		"--project", project,
 		"--platform", "managed",
@@ -88,11 +89,11 @@ func promptDeploymentRegion(ctx context.Context, project string) (string, error)
 }
 
 func serviceURL(project, name, region string) (string, error) {
-	cmd := exec.Command("gcloud", "beta", "run", "services", "describe", name,
+	cmd := exec.Command("gcloud", "run", "services", "describe", name,
 		"--project", project,
 		"--platform", "managed",
 		"--region", region,
-		"--format", "value(status.domain)")
+		"--format", "value(status.address.url)")
 
 	b, err := cmd.CombinedOutput()
 	if err != nil {
@@ -112,14 +113,28 @@ func tryFixServiceName(name string) string {
 	if name == "" {
 		return name
 	}
+
+	name = strings.ToLower(name)
+
+	reg := regexp.MustCompile("[^a-z0-9-]+")
+
+	name = reg.ReplaceAllString(name, "-")
+
+	if name[0] == '-' {
+		name = fmt.Sprintf("svc%s", name)
+	}
+
 	if !unicode.IsLetter([]rune(name)[0]) {
 		name = fmt.Sprintf("svc-%s", name)
 	}
+
 	if len(name) > 63 {
 		name = name[:63]
 	}
+
 	for name[len(name)-1] == '-' {
 		name = name[:len(name)-1]
 	}
+
 	return name
 }
